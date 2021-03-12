@@ -18,6 +18,7 @@ class PCA:
         self.image_list = []
         self.truncate = truncate
         self.excel_name = excel_name
+
         # Get images
         images = os.listdir(input_folder)
         images = sorted([int(os.path.splitext(img)[0]) for img in images])
@@ -40,14 +41,21 @@ class PCA:
 
         self.pca = self.calculate_pca(out_folder, truncate)
 
-    def flat_dimension(self, standarization=1):
+    def flat_dimension(self, standarization=True):
         """2d to 1d and optional data standarization."""
         matrix = np.zeros((self.image_list[0].size, self.n_bands))
+        m_mean = np.array(self.image_list).mean()
+        m_std = np.array(self.image_list).std()
+
         for i, element in enumerate(self.image_list):
             element = element.flatten()
             if standarization:
-                element = (element - element.mean()) / element.std()
+                element = (element - m_mean) / m_std
             matrix[:, i] = element
+
+        m_mean = matrix.mean()
+        m_std = matrix.std()
+
         return matrix
 
     def calculate_pca(self, out_folder, truncate):
@@ -62,6 +70,7 @@ class PCA:
         pc_list = []
 
         pc_img = np.zeros((self.img_shape[0], self.img_shape[1]))
+        pc = np.matmul(self.matrix, self.eigvecs)
 
         for i, vec in enumerate(np.transpose(self.eigvecs)):
             if truncate < self.n_bands:
@@ -74,11 +83,6 @@ class PCA:
             pc_list.append(pc)
             resized_pc = pc.reshape(-1, self.img_shape[1])
             pc_img = cv2.normalize(resized_pc, pc_img, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-
-            if self.show:
-                cv2.namedWindow("PCA " + str(i), cv2.WINDOW_NORMAL)
-                cv2.imshow("PCA " + str(i), pc_img)
-                cv2.waitKey(0)
 
             cv2.imwrite(out_folder + "/" + str(i) + ".png", pc_img)
 
@@ -185,20 +189,7 @@ class PCA:
 
         plt.show()
 
-    def crop_input_images(self, in_folder, out_folder):
-        """Delete the white area surrounding input images."""
-        images = os.listdir(in_folder)
 
-        images = sorted([int(os.path.splitext(img)[0]) for img in images])
-        images = [str(i) + ".png" for i in images]
-        save_images = 1
-        if save_images:
-            for i, image_name in enumerate(images):
-
-                img = Image.open(in_folder + "/" + image_name)
-
-                crop_img = ImageOps.grayscale(img.crop((90, 96, 649, 542)))
-                crop_img.save(out_folder + str(i) + ".png")
 
     def save_false_rgb(self, out_folder):
         i = np.zeros([self.img_shape[0], self.img_shape[1], 3], dtype=np.uint8)
@@ -243,9 +234,9 @@ class PCA:
 
     def save_rgb(self, name, out_folder):
         i = np.zeros([self.img_shape[0], self.img_shape[1], 3], dtype=np.uint8)
-        i[:, :, 0] = self.image_list[1]
-        i[:, :, 1] = self.image_list[2]
-        i[:, :, 2] = self.image_list[3]
+        i[:, :, 0] = self.image_list[10]
+        i[:, :, 1] = self.image_list[12]
+        i[:, :, 2] = self.image_list[1]
         # cv2.imshow("RGB", i)
         cv2.imwrite(out_folder + name, i)
 
@@ -277,14 +268,14 @@ if __name__ == "__main__":
 
         excel_name = args.excel
     else:
-        out_folder = "Saved/pc_gc/"
+        out_folder = "Saved/std/pc_gc/"
         in_folder = "gc/"
         bands = 13
         truncate = bands
-        std = 1
+        std = True
         excel_name = "pc_gc.xlsx"
 
     pca = PCA(in_folder, out_folder, bands, truncate, std, excel_name)
-    # pca.show_pca_contributions()
+    pca.show_pca_contributions()
     pca.write_pcs()
-    # pca.save_rgb("RGB.png", "")
+    pca.save_rgb("RGB_pc.png", "")
