@@ -1,6 +1,7 @@
 import glob
 import os
 from collections import namedtuple
+import natsort
 
 import cv2
 import matplotlib.pyplot as plt
@@ -12,26 +13,45 @@ from PIL import Image, ImageOps
 
 
 class PCA:
-    def __init__(self, input_folder, out_folder, bands, truncate, std, excel_name):
+    """PCA computing
+    
+    Args:
+        in_folder (str): Folder with input images.
+        pc_folder (str): Folder where PCs will be stored.
+        rgb_folder (str): Folder where false RGB images will be stored.
+        bands (int): Number of bands.
+        excel_name (str): Name of Excel File.
+    """
+    def __init__(self, in_folder, pc_folder, rgb_folder, bands, excel_name):
         self.n_bands = bands
 
         self.image_list = []
-        self.truncate = truncate
         self.excel_name = excel_name
 
         # Get images
-        images = os.listdir(input_folder)
-        images = sorted([int(os.path.splitext(img)[0]) for img in images])
-        images = [str(i) + ".png" for i in images]
+        self.image_names = os.listdir(in_folder)
+        self.image_names = natsort.natsorted(self.image_names) # Sort images
 
-        for image_name in images:
-            img = cv2.imread(input_folder + "/" + image_name, 0)
+        for image_name in self.image_names:
+            img = cv2.imread(in_folder + "/" + image_name, 0)
             resize_img = img
             self.image_list.append(resize_img)
 
+        # Save original shape
         self.img_shape = self.image_list[0].shape
 
-        self.matrix = self.flat_dimension(standarization=std)
+        self.matrix = np.zeros((self.image_list[0].size, self.n_bands))
+        # Data mean
+        m_mean = np.array(self.image_list).mean()
+        # Data standard deviation
+        m_std = np.array(self.image_list).std()
+
+        for i, element in enumerate(self.image_list):
+            # 2D to 1D
+            element = element.flatten()
+            # Image standardization
+            element = (element - m_mean) / m_std
+            self.matrix[:, i] = element
 
         cov_matrix = np.cov(self.matrix.transpose())
         self.eigvals, self.eigvecs = la.eig(cov_matrix)
@@ -39,57 +59,42 @@ class PCA:
         self.eigvals = self.eigvals[order]
         self.eigvecs = self.eigvecs[:, order]
 
-        self.pca = self.calculate_pca(out_folder, truncate)
+        self.pca = self.calculate_pca(pc_folder, rgb_folder)
 
-    def flat_dimension(self, standarization=True):
-        """2d to 1d and optional data standarization."""
-        matrix = np.zeros((self.image_list[0].size, self.n_bands))
-        m_mean = np.array(self.image_list).mean()
-        m_std = np.array(self.image_list).std()
-
-        for i, element in enumerate(self.image_list):
-            element = element.flatten()
-            if standarization:
-                element = (element - m_mean) / m_std
-            matrix[:, i] = element
-
-        m_mean = matrix.mean()
-        m_std = matrix.std()
-
-        return matrix
-
-    def calculate_pca(self, out_folder, truncate):
+    def calculate_pca(self, pc_folder, rgb_folder):
         """PCA calculation.
-
+        
         Args:
-            out_folder (str): Output folder for PCA images.
-            truncate (int): The number of bands considered at image representation.
+            pc_folder (str): Path to save PCA images.
+            rgb_folder (str): Path to save false RGB images.
+
+        Return:
+            pc_list (list): List os computed Principal Components.
 
         """
-        deleted_bands = []
         pc_list = []
 
         pc_img = np.zeros((self.img_shape[0], self.img_shape[1]))
-        pc = np.matmul(self.matrix, self.eigvecs)
+        # PCs computing
+        pcs = np.matmul(self.matrix, self.eigvecs)
 
-        for i, vec in enumerate(np.transpose(self.eigvecs)):
-            if truncate < self.n_bands:
-                vec_min_loc = vec.argsort()[:-truncate]
-                truncated_vec = [v if j not in vec_min_loc else 0 for j, v in enumerate(vec)]
-                pc = np.matmul(self.matrix, np.transpose(truncated_vec))
-            else:
-                pc = np.matmul(self.matrix, np.transpose(vec))
-
-            pc_list.append(pc)
+        for i, pc in enumerate(np.transpose(pcs)):
+            img_path = pc_folder + "/" + self.image_names[i]
+            # Resize PC from 1-Dimension to 2-Dimension with original images shape
             resized_pc = pc.reshape(-1, self.img_shape[1])
+            # Normalize data from 0 to 255
             pc_img = cv2.normalize(resized_pc, pc_img, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+            cv2.imwrite(img_path, pc_img)
 
-            cv2.imwrite(out_folder + "/" + str(i) + ".png", pc_img)
+            # Get the 3 bands with greater weighting for each PC
+            best_bands = self.eigvecs[i].argsort()[::-1][:3]
+            # Create a false RGB image with them
+            self.save_rgb(self.image_names[i], rgb_folder, best_bands)
 
         return pc_list
 
     def write_pcs(self):
-        """Write sorted eigenvectors in Excel file."""
+        """Write sorted eigenvectors in Excel file and get false RGB images."""
         excel_name = self.excel_name
         sheet = "PCs"
         sheet_2 = "Sorted_PCs"
@@ -107,13 +112,17 @@ class PCA:
         bot_blue = "#D5EEF3"
         bot_green = "#EBF1DE"
 
+        # Format for titles at Sorted_PCs sheet
         merge_format = wb.add_format({"bold": 1, "border": 1, "align": "center"})
 
-        col_df = ["Comp. " + str(i + 1) for i in range(self.n_bands)]
-        row_df = ["Band " + str(i + 1) for i in range(self.n_bands)]
+        # WRITE EIGENVECTORS
+        col_df = ["Comp. " + str(i) for i in range(self.n_bands)]
+        row_df = ["Band " + str(i) for i in range(self.n_bands)]
         vecs = np.round(np.array(self.eigvecs), 4)
         eigvecs_df = DataFrame(data=vecs, columns=col_df, index=row_df)
         eigvecs_df.to_excel(writer, sheet_name=sheet)
+
+        # Fit columns to longest cell text.
         max_length = max(
             [
                 max([len(str(s)) for s in eigvecs_df[col].values] + [len(str(col))])
@@ -122,7 +131,7 @@ class PCA:
         )
         ws_pc.set_column(0, self.n_bands + 1, max_length + 2)
 
-        # WRITE SORTED VECTORS
+        # WRITE SORTED EIGENVECTORS
         sorted_vecs = np.transpose(vecs)
         index = list(range(self.n_bands))
 
@@ -180,65 +189,31 @@ class PCA:
         writer.save()
 
     def show_pca_contributions(self):
-        # Plot the contribution of each PC
+        """Plot the contribution of each PC"""
         sum_eigvals = sum(self.eigvals)
         eigvals = self.eigvals * 100 / sum_eigvals
         cum_eigvals = np.cumsum(eigvals)
         plt.bar(range(len(eigvals)), eigvals)
         plt.step(range(len(cum_eigvals)), cum_eigvals)
+        plt.savefig("PCA_Contributions.png")
 
-        plt.show()
-
-
-
-    def save_false_rgb(self, out_folder):
-        i = np.zeros([self.img_shape[0], self.img_shape[1], 3], dtype=np.uint8)
-        i[:, :, 0] = self.image_list[10]
-        i[:, :, 1] = self.image_list[11]
-        i[:, :, 2] = self.image_list[12]
-        cv2.imshow("0 1 2", i)
-        cv2.imwrite(out_folder + "False color (10, 11, 12)/0 1 2.png", i)
-
-        i[:, :, 0] = self.image_list[10]
-        i[:, :, 1] = self.image_list[12]
-        i[:, :, 2] = self.image_list[11]
-        cv2.imshow("0 2 1", i)
-        cv2.imwrite(out_folder + "False color (10, 11, 12)/0 2 1.png", i)
-
-        i[:, :, 0] = self.image_list[11]
-        i[:, :, 1] = self.image_list[10]
-        i[:, :, 2] = self.image_list[12]
-        cv2.imshow("1 0 2", i)
-        cv2.imwrite(out_folder + "False color (10, 11, 12)/1 0 2.png", i)
-
-        i[:, :, 0] = self.image_list[12]
-        i[:, :, 1] = self.image_list[10]
-        i[:, :, 2] = self.image_list[11]
-        cv2.imshow("2 0 1", i)
-        cv2.imwrite(out_folder + "False color (10, 11, 12)/2 0 1..png", i)
-
-        i[:, :, 0] = self.image_list[11]
-        i[:, :, 1] = self.image_list[12]
-        i[:, :, 2] = self.image_list[10]
-        cv2.imshow("1 2 0", i)
-        cv2.imwrite(out_folder + "False color (10, 11, 12)/1 2 0.png", i)
-
-        i[:, :, 0] = self.image_list[12]
-        i[:, :, 1] = self.image_list[11]
-        i[:, :, 2] = self.image_list[10]
-        cv2.imshow("2 1 0", i)
-        cv2.imwrite(out_folder + "False color (10, 11, 12)/2 1 0.png", i)
-
-        cv2.waitKey(0)
-        cv2.destroyAllWindows_pc()
-
-    def save_rgb(self, name, out_folder):
-        i = np.zeros([self.img_shape[0], self.img_shape[1], 3], dtype=np.uint8)
-        i[:, :, 0] = self.image_list[10]
-        i[:, :, 1] = self.image_list[12]
-        i[:, :, 2] = self.image_list[1]
-        # cv2.imshow("RGB", i)
-        cv2.imwrite(out_folder + name, i)
+    def save_rgb(self, name, pc_folder, bands):
+        """Create an RGB image with 3 selected bands.
+        
+        Args:
+            name (str): Name of image.
+            pc_folder (str): Output folder.
+            bands (list): list of 3 bands to create an image with 3 channels (B, G, R)
+        """
+        if len(bands) != 3:
+            print("Error: you should choose only 3 bands [B, G, R]")
+        else:
+            # Creates a matrix with dimensions of original images
+            img = np.zeros([self.img_shape[0], self.img_shape[1], 3], dtype=np.uint8)
+            img[:, :, 0] = self.image_list[bands[0]]
+            img[:, :, 1] = self.image_list[bands[1]]
+            img[:, :, 2] = self.image_list[bands[2]]
+            cv2.imwrite(pc_folder + "/" + name, img)
 
 
 if __name__ == "__main__":
@@ -248,34 +223,29 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Compare groundtruth annotation bounding boxes " "with algorithm detections."
     )
-    parser.add_argument("input", type=str, help="Folder with images to be analysed.")
-    parser.add_argument("output", type=str, help="Output folder where PCA images will be saved.")
-    parser.add_argument("bands", type=int, help="Number of bands.")
-    parser.add_argument("truncate", type=int, help="Number of images applied on PCA visualization")
-    parser.add_argument("std", type=int, help="1 or 0, enable or disable.")
-    parser.add_argument("excel", type=str, help="Excel file name.")
+    parser.add_argument("-i", "--input", type=str, help="Folder with images to be analysed.")
+    parser.add_argument("-o", "--pcOut", type=str, help="Output folder where PCA images will be stored.")
+    parser.add_argument("-rgb", "--rgbOut", type=str, help="Output folder where false RGB images composed with"
+    "the 3 highest weighted images of each Principal Component.")
+    parser.add_argument("-b", "--bands", type=int, help="Number of bands.")
+    parser.add_argument("-e", "--excel", type=str, help="Excel file name.")
 
-    if len(sys.argv) == 6:
+    if len(sys.argv) == 11:
         args = parser.parse_args()
-        out_folder = args.output
+        pc_folder = args.pcout
+        rgb_folder = args.rgbout
         in_folder = args.input
         bands = args.bands
-        truncate = args.truncate
-        std = args.std
-
-        if std != 1 or std != 0:
-            raise Exception('"std" should be 1 or 0')
-
         excel_name = args.excel
+    elif len(sys.argv) == 2:
+        args = parser.parse_args()
     else:
-        out_folder = "Saved/std/pc_gc/"
-        in_folder = "gc/"
+        pc_folder = "PCS"
+        rgb_folder = "PCS_RGB"
+        in_folder = "gc"
         bands = 13
-        truncate = bands
-        std = True
         excel_name = "pc_gc.xlsx"
 
-    pca = PCA(in_folder, out_folder, bands, truncate, std, excel_name)
+    pca = PCA(in_folder, pc_folder, rgb_folder, bands, excel_name)
     pca.show_pca_contributions()
     pca.write_pcs()
-    pca.save_rgb("RGB_pc.png", "")
