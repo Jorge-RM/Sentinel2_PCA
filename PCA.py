@@ -87,7 +87,7 @@ class PCA:
             cv2.imwrite(img_path, pc_img)
 
             # Get the 3 bands with greater weighting for each PC
-            best_bands = self.eigvecs[i].argsort()[::-1][:3]
+            best_bands = np.transpose(self.eigvecs)[i].argsort()[::-1][:3]
             # Create a false RGB image with them
             self.save_rgb(self.image_names[i], rgb_folder, best_bands)
 
@@ -240,11 +240,11 @@ if __name__ == "__main__":
     elif len(sys.argv) == 2:
         args = parser.parse_args()
     else:
-        pc_folder = "PCS"
-        rgb_folder = "PCS_RGB"
-        in_folder = "gc"
+        pc_folder = "PCS/GC_fire"
+        rgb_folder = "PCS_RGB/GC_fire"
+        in_folder = "crop/GC_fire"
         bands = 13
-        excel_name = "pc_gc.xlsx"
+        excel_name = "GC_fire.xlsx"
 
     pca = PCA(in_folder, pc_folder, rgb_folder, bands, excel_name)
     pca.show_pca_contributions()
