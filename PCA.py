@@ -221,7 +221,7 @@ if __name__ == "__main__":
     import sys
 
     parser = argparse.ArgumentParser(
-        description="Compare groundtruth annotation bounding boxes " "with algorithm detections."
+        description="Compute PCA."
     )
     parser.add_argument("-i", "--input", type=str, help="Folder with images to be analysed.")
     parser.add_argument("-o", "--pcOut", type=str, help="Output folder where PCA images will be stored.")
