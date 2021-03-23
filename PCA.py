@@ -1,10 +1,10 @@
 import glob
 import os
 from collections import namedtuple
-import natsort
 
 import cv2
 import matplotlib.pyplot as plt
+import natsort
 import numpy as np
 import pandas as pd
 import scipy.linalg as la
@@ -14,7 +14,7 @@ from PIL import Image, ImageOps
 
 class PCA:
     """PCA computing
-    
+
     Args:
         in_folder (str): Folder with input images.
         pc_folder (str): Folder where PCs will be stored.
@@ -22,15 +22,15 @@ class PCA:
         bands (int): Number of bands.
         excel_name (str): Name of Excel File.
     """
-    def __init__(self, in_folder, pc_folder, rgb_folder, bands, excel_name):
+
+    def __init__(self, in_folder, bands):
         self.n_bands = bands
 
         self.image_list = []
-        self.excel_name = excel_name
 
         # Get images
         self.image_names = os.listdir(in_folder)
-        self.image_names = natsort.natsorted(self.image_names) # Sort images
+        self.image_names = natsort.natsorted(self.image_names)  # Sort images
 
         for image_name in self.image_names:
             img = cv2.imread(in_folder + "/" + image_name, 0)
@@ -59,11 +59,9 @@ class PCA:
         self.eigvals = self.eigvals[order]
         self.eigvecs = self.eigvecs[:, order]
 
-        self.pca = self.calculate_pca(pc_folder, rgb_folder)
-
     def calculate_pca(self, pc_folder, rgb_folder):
         """PCA calculation.
-        
+
         Args:
             pc_folder (str): Path to save PCA images.
             rgb_folder (str): Path to save false RGB images.
@@ -72,13 +70,12 @@ class PCA:
             pc_list (list): List os computed Principal Components.
 
         """
-        pc_list = []
 
         pc_img = np.zeros((self.img_shape[0], self.img_shape[1]))
         # PCs computing
-        pcs = np.matmul(self.matrix, self.eigvecs)
+        self.pcs = np.matmul(self.matrix, self.eigvecs)
 
-        for i, pc in enumerate(np.transpose(pcs)):
+        for i, pc in enumerate(np.transpose(self.pcs)):
             img_path = pc_folder + "/" + self.image_names[i]
             # Resize PC from 1-Dimension to 2-Dimension with original images shape
             resized_pc = pc.reshape(-1, self.img_shape[1])
@@ -91,11 +88,10 @@ class PCA:
             # Create a false RGB image with them
             self.save_rgb(self.image_names[i], rgb_folder, best_bands)
 
-        return pc_list
+        return self.pcs
 
-    def write_pcs(self):
+    def write_pcs(self, excel_name):
         """Write sorted eigenvectors in Excel file and get false RGB images."""
-        excel_name = self.excel_name
         sheet = "PCs"
         sheet_2 = "Sorted_PCs"
         data_init = [0, 0]
@@ -199,7 +195,7 @@ class PCA:
 
     def save_rgb(self, name, pc_folder, bands):
         """Create an RGB image with 3 selected bands.
-        
+
         Args:
             name (str): Name of image.
             pc_folder (str): Output folder.
@@ -220,13 +216,18 @@ if __name__ == "__main__":
     import argparse
     import sys
 
-    parser = argparse.ArgumentParser(
-        description="Compute PCA."
-    )
+    parser = argparse.ArgumentParser(description="Compute PCA.")
     parser.add_argument("-i", "--input", type=str, help="Folder with images to be analysed.")
-    parser.add_argument("-o", "--pcOut", type=str, help="Output folder where PCA images will be stored.")
-    parser.add_argument("-rgb", "--rgbOut", type=str, help="Output folder where false RGB images composed with"
-    "the 3 highest weighted images of each Principal Component.")
+    parser.add_argument(
+        "-o", "--pcOut", type=str, help="Output folder where PCA images will be stored."
+    )
+    parser.add_argument(
+        "-rgb",
+        "--rgbOut",
+        type=str,
+        help="Output folder where false RGB images composed with"
+        "the 3 highest weighted images of each Principal Component.",
+    )
     parser.add_argument("-b", "--bands", type=int, help="Number of bands.")
     parser.add_argument("-e", "--excel", type=str, help="Excel file name.")
 
@@ -240,12 +241,13 @@ if __name__ == "__main__":
     elif len(sys.argv) == 2:
         args = parser.parse_args()
     else:
-        pc_folder = "PCS/GC_fire"
-        rgb_folder = "PCS_RGB/GC_fire"
-        in_folder = "crop/GC_fire"
+        pc_folder = "PCS/Etna_fire"
+        rgb_folder = "PCS_RGB/Etna_fire"
+        in_folder = "crop/Etna_fire"
         bands = 13
-        excel_name = "GC_fire.xlsx"
+        excel_name = "Etna_fire.xlsx"
 
-    pca = PCA(in_folder, pc_folder, rgb_folder, bands, excel_name)
+    pca = PCA(in_folder, bands)
+    pca.calculate_pca(pc_folder, rgb_folder)
     pca.show_pca_contributions()
-    pca.write_pcs()
+    pca.write_pcs(excel_name)
