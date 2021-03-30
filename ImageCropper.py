@@ -1,4 +1,6 @@
 import os
+
+import natsort
 from PIL import Image, ImageOps
 
 if __name__ == "__main__":
@@ -25,14 +27,17 @@ if __name__ == "__main__":
     y1 = int(args.y1)
     x2 = int(args.x2)
     y2 = int(args.y2)
-    images = os.listdir(in_folder)
+    # images = os.listdir(in_folder)
 
-    images = sorted([int(os.path.splitext(img)[0]) for img in images])
-    images = [str(i) + ".png" for i in images]
-    save_images = 1
-    if save_images:
-        for i, image_name in enumerate(images):
-
-            img = Image.open(in_folder + "/" + image_name)
-            crop_img = ImageOps.grayscale(img.crop((x1, y1, x2, y2)))
-            crop_img.save(out_folder + "/" + str(i) + ".png")
+    main_folders = os.listdir(in_folder)
+    for main_folder in main_folders:
+        main_folder_path = os.path.join(in_folder, main_folder)
+        folders = os.listdir(main_folder_path)
+        for folder in folders:
+            folder_path = os.path.join(main_folder_path, folder)
+            imgs = os.listdir(folder_path)
+            for img_name in imgs:
+                img = Image.open(folder_path + "/" + img_name)
+                crop_img = ImageOps.grayscale(img.crop((x1, y1, x2, y2)))
+                crop_img.save(out_folder + "/" + main_folder + "/" + folder + "/" + img_name)
+                print(out_folder + "/" + main_folder + "/" + folder + "/" + img_name + "\n")

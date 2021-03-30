@@ -27,6 +27,7 @@ class PCA:
         self.n_bands = bands
 
         self.image_list = []
+        self.in_folder = in_folder
 
         # Get images
         self.image_names = os.listdir(in_folder)
@@ -191,7 +192,8 @@ class PCA:
         cum_eigvals = np.cumsum(eigvals)
         plt.bar(range(len(eigvals)), eigvals)
         plt.step(range(len(cum_eigvals)), cum_eigvals)
-        plt.savefig("PCA_Contributions.png")
+        name = os.path.basename(self.in_folder)
+        plt.savefig(name + ".png")
 
     def save_rgb(self, name, pc_folder, bands):
         """Create an RGB image with 3 selected bands.

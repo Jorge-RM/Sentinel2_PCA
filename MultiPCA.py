@@ -38,18 +38,6 @@ class MultiPCA:
                 self.eigvalues_array[f, :] = np.round(eigvals, 4)
                 self.pca_list.append(pca)
 
-        fig, ax = plt.subplots()
-        ax.set(
-            xlabel="Principal Component",
-            ylabel="Weighting (%)",
-            title="Principal Components weighting",
-        )
-        ax.grid()
-        plt.xticks(range(self.n_bands))
-        for ev in self.eigvalues_array:
-            ax.plot(range(self.n_bands), ev, "o", linestyle="dotted")
-        fig.savefig("Global_Contribution.png")
-
     def save_data(self, out_container):
         """Save PCA images, graphs and Excels.
 
@@ -75,6 +63,19 @@ class MultiPCA:
             pca.calculate_pca(local_pca_folder, local_rgb_folder)
             excel_file = os.path.join(excel_folder, folder_name) + ".xlsx"
             pca.write_pcs(excel_file)
+
+        fig, ax = plt.subplots()
+        ax.set(
+            xlabel="Principal Component",
+            ylabel="Weighting (%)",
+            title="Principal Components weighting",
+        )
+        ax.grid()
+        plt.ylim([0, 100])
+        plt.xticks(range(self.n_bands))
+        for ev in self.eigvalues_array:
+            ax.plot(range(self.n_bands), ev, "o", linestyle="dotted")
+        fig.savefig(out_container + "\\" + os.path.basename(out_container) + ".png")
 
 
 if __name__ == "__main__":
