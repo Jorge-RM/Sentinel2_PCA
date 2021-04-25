@@ -94,15 +94,10 @@ if __name__ == "__main__":
         out_container = args.output
         in_container = args.input
         bands = args.bands
-    elif len(sys.argv) == 2:
-        args = parser.parse_args()
+        if os.path.isdir(in_container):
+            pca = MultiPCA(in_container, bands)
+            pca.save_data(out_container)
+        else:
+            print("Missing folder: %s", in_container)
     else:
-        in_container = "crop"
-        out_container = "OUT"
-        bands = 13
-
-    if os.path.isdir(in_container):
-        pca = MultiPCA(in_container, bands)
-        pca.save_data(out_container)
-    else:
-        print("Missing folder: %s", in_container)
+        print("Invalid number of arguments")

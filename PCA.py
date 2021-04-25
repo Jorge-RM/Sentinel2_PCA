@@ -34,14 +34,13 @@ class PCA:
         self.image_names = natsort.natsorted(self.image_names)  # Sort images
 
         for image_name in self.image_names:
-            img = cv2.imread(in_folder + "/" + image_name, 0)
-            resize_img = img
-            self.image_list.append(resize_img)
+            img = cv2.imread(in_folder + "/" + image_name, cv2.IMREAD_ANYDEPTH)
+            self.image_list.append(img)
 
         # Save original shape
         self.img_shape = self.image_list[0].shape
 
-        self.matrix = np.zeros((self.image_list[0].size, self.n_bands))
+        self.matrix = np.zeros((self.image_list[0].size, self.n_bands), dtype=np.float32)
         # Data mean
         m_mean = np.array(self.image_list).mean()
         # Data standard deviation
@@ -72,7 +71,7 @@ class PCA:
 
         """
 
-        pc_img = np.zeros((self.img_shape[0], self.img_shape[1]))
+        pc_img = np.zeros((self.img_shape[0], self.img_shape[1]), dtype=np.float32)
         # PCs computing
         self.pcs = np.matmul(self.matrix, self.eigvecs)
 
@@ -80,8 +79,8 @@ class PCA:
             img_path = pc_folder + "/" + self.image_names[i]
             # Resize PC from 1-Dimension to 2-Dimension with original images shape
             resized_pc = pc.reshape(-1, self.img_shape[1])
-            # Normalize data from 0 to 255
-            pc_img = cv2.normalize(resized_pc, pc_img, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+            # Normalize data from 0 to 1
+            pc_img = cv2.normalize(resized_pc, pc_img, 0, 1, cv2.NORM_MINMAX, dtype=cv2.CV_32F)
             cv2.imwrite(img_path, pc_img)
 
             # Get the 3 bands with greater weighting for each PC
@@ -208,9 +207,9 @@ class PCA:
         else:
             # Creates a matrix with dimensions of original images
             img = np.zeros([self.img_shape[0], self.img_shape[1], 3], dtype=np.uint8)
-            img[:, :, 0] = self.image_list[bands[0]]
-            img[:, :, 1] = self.image_list[bands[1]]
-            img[:, :, 2] = self.image_list[bands[2]]
+            img[:, :, 0] = self.image_list[bands[0]] * 255
+            img[:, :, 1] = self.image_list[bands[1]] * 255
+            img[:, :, 2] = self.image_list[bands[2]] * 255
             cv2.imwrite(pc_folder + "/" + name, img)
 
 
@@ -240,16 +239,9 @@ if __name__ == "__main__":
         in_folder = args.input
         bands = args.bands
         excel_name = args.excel
-    elif len(sys.argv) == 2:
-        args = parser.parse_args()
+        pca = PCA(in_folder, bands)
+        pca.calculate_pca(pc_folder, rgb_folder)
+        pca.show_pca_contributions()
+        pca.write_pcs(excel_name)
     else:
-        pc_folder = "PCS/Etna_fire"
-        rgb_folder = "PCS_RGB/Etna_fire"
-        in_folder = "crop/Etna_fire"
-        bands = 13
-        excel_name = "Etna_fire.xlsx"
-
-    pca = PCA(in_folder, bands)
-    pca.calculate_pca(pc_folder, rgb_folder)
-    pca.show_pca_contributions()
-    pca.write_pcs(excel_name)
+        print("Invalid number of arguments")
