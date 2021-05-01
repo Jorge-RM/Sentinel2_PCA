@@ -75,7 +75,9 @@ class MultiPCA:
         plt.xticks(range(self.n_bands))
         for ev in self.eigvalues_array:
             ax.plot(range(self.n_bands), ev, "o", linestyle="dotted")
-        fig.savefig(out_container + "\\" + os.path.basename(out_container) + ".png")
+        fig.savefig(
+            out_container + "\\" + os.path.basename(out_container) + ".png"
+        )
 
 
 if __name__ == "__main__":
@@ -84,12 +86,17 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Compute PCA.")
     parser.add_argument(
-        "-i", "--input", type=str, help="Folder container of folders with hyperspectral images."
+        "-i",
+        "--input",
+        type=str,
+        help="Folder container of folders with hyperspectral images.",
     )
-    parser.add_argument("-o", "--output", type=str, help="Output folder to save data.")
+    parser.add_argument(
+        "-o", "--output", type=str, help="Output folder to save data."
+    )
     parser.add_argument("-b", "--bands", type=int, help="Number of bands.")
 
-    if len(sys.argv) == 6:
+    if len(sys.argv) == 7:
         args = parser.parse_args()
         out_container = args.output
         in_container = args.input

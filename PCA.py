@@ -17,10 +17,7 @@ class PCA:
 
     Args:
         in_folder (str): Folder with input images.
-        pc_folder (str): Folder where PCs will be stored.
-        rgb_folder (str): Folder where false RGB images will be stored.
         bands (int): Number of bands.
-        excel_name (str): Name of Excel File.
     """
 
     def __init__(self, in_folder, bands):
@@ -40,7 +37,9 @@ class PCA:
         # Save original shape
         self.img_shape = self.image_list[0].shape
 
-        self.matrix = np.zeros((self.image_list[0].size, self.n_bands), dtype=np.float32)
+        self.matrix = np.zeros(
+            (self.image_list[0].size, self.n_bands), dtype=np.float32
+        )
         # Data mean
         m_mean = np.array(self.image_list).mean()
         # Data standard deviation
@@ -66,12 +65,10 @@ class PCA:
             pc_folder (str): Path to save PCA images.
             rgb_folder (str): Path to save false RGB images.
 
-        Return:
-            pc_list (list): List os computed Principal Components.
-
         """
-
-        pc_img = np.zeros((self.img_shape[0], self.img_shape[1]), dtype=np.float32)
+        pc_img = np.zeros(
+            (self.img_shape[0], self.img_shape[1]), dtype=np.float32
+        )
         # PCs computing
         self.pcs = np.matmul(self.matrix, self.eigvecs)
 
@@ -80,7 +77,9 @@ class PCA:
             # Resize PC from 1-Dimension to 2-Dimension with original images shape
             resized_pc = pc.reshape(-1, self.img_shape[1])
             # Normalize data from 0 to 1
-            pc_img = cv2.normalize(resized_pc, pc_img, 0, 1, cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+            pc_img = cv2.normalize(
+                resized_pc, pc_img, 0, 1, cv2.NORM_MINMAX, dtype=cv2.CV_32F
+            )
             cv2.imwrite(img_path, pc_img)
 
             # Get the 3 bands with greater weighting for each PC
@@ -109,7 +108,9 @@ class PCA:
         bot_green = "#EBF1DE"
 
         # Format for titles at Sorted_PCs sheet
-        merge_format = wb.add_format({"bold": 1, "border": 1, "align": "center"})
+        merge_format = wb.add_format(
+            {"bold": 1, "border": 1, "align": "center"}
+        )
 
         # WRITE EIGENVECTORS
         col_df = ["Comp. " + str(i) for i in range(self.n_bands)]
@@ -121,7 +122,10 @@ class PCA:
         # Fit columns to longest cell text.
         max_length = max(
             [
-                max([len(str(s)) for s in eigvecs_df[col].values] + [len(str(col))])
+                max(
+                    [len(str(s)) for s in eigvecs_df[col].values]
+                    + [len(str(col))]
+                )
                 for col in eigvecs_df.columns
             ]
         )
@@ -132,19 +136,34 @@ class PCA:
         index = list(range(self.n_bands))
 
         for i, vec in enumerate(sorted_vecs):
-            sorted_df = DataFrame(data=vec, columns=["Eigenvectors"], index=index)
-            sorted_df = sorted_df.sort_values(by=["Eigenvectors"], ascending=False)
+            sorted_df = DataFrame(
+                data=vec, columns=["Eigenvectors"], index=index
+            )
+            sorted_df = sorted_df.sort_values(
+                by=["Eigenvectors"], ascending=False
+            )
             sorted_df = sorted_df.reset_index()
             sorted_df = sorted_df.rename(columns={"index": "Bands"})
 
-            sorted_df.to_excel(writer, sheet_name=sheet_2, startrow=1, startcol=i * 2, index=False)
+            sorted_df.to_excel(
+                writer,
+                sheet_name=sheet_2,
+                startrow=1,
+                startcol=i * 2,
+                index=False,
+            )
             ws_sort = writer.sheets[sheet_2]
-            ws_sort.merge_range(0, i * 2, 0, i * 2 + 1, "PC " + str(i), merge_format)
+            ws_sort.merge_range(
+                0, i * 2, 0, i * 2 + 1, "PC " + str(i), merge_format
+            )
 
             # Find the maximum length of the column names and values
             max_length = max(
                 [
-                    max([len(str(s)) for s in sorted_df[col].values] + [len(str(col))])
+                    max(
+                        [len(str(s)) for s in sorted_df[col].values]
+                        + [len(str(col))]
+                    )
                     for col in sorted_df.columns
                 ]
             )
@@ -154,38 +173,62 @@ class PCA:
             if i % 2:
                 cell_format = wb.add_format({"bg_color": top_blue})
                 ws_sort.conditional_format(
-                    0, i * 2, 0, i * 2 + 1, {"type": "no_blanks", "format": cell_format}
+                    0,
+                    i * 2,
+                    0,
+                    i * 2 + 1,
+                    {"type": "no_blanks", "format": cell_format},
                 )
 
                 cell_format = wb.add_format({"bg_color": mid_blue})
                 ws_sort.conditional_format(
-                    1, i * 2, 1, i * 2 + 1, {"type": "no_blanks", "format": cell_format}
+                    1,
+                    i * 2,
+                    1,
+                    i * 2 + 1,
+                    {"type": "no_blanks", "format": cell_format},
                 )
 
                 cell_format = wb.add_format({"bg_color": bot_blue})
                 ws_sort.conditional_format(
-                    2, i * 2, 14, i * 2 + 1, {"type": "no_blanks", "format": cell_format}
+                    2,
+                    i * 2,
+                    14,
+                    i * 2 + 1,
+                    {"type": "no_blanks", "format": cell_format},
                 )
             else:
                 cell_format = wb.add_format({"bg_color": top_green})
                 ws_sort.conditional_format(
-                    0, i * 2, 0, i * 2 + 1, {"type": "no_blanks", "format": cell_format}
+                    0,
+                    i * 2,
+                    0,
+                    i * 2 + 1,
+                    {"type": "no_blanks", "format": cell_format},
                 )
 
                 cell_format = wb.add_format({"bg_color": mid_green})
                 ws_sort.conditional_format(
-                    1, i * 2, 1, i * 2 + 1, {"type": "no_blanks", "format": cell_format}
+                    1,
+                    i * 2,
+                    1,
+                    i * 2 + 1,
+                    {"type": "no_blanks", "format": cell_format},
                 )
 
                 cell_format = wb.add_format({"bg_color": bot_green})
                 ws_sort.conditional_format(
-                    2, i * 2, 14, i * 2 + 1, {"type": "no_blanks", "format": cell_format}
+                    2,
+                    i * 2,
+                    14,
+                    i * 2 + 1,
+                    {"type": "no_blanks", "format": cell_format},
                 )
 
         writer.save()
 
     def show_pca_contributions(self):
-        """Plot the contribution of each PC"""
+        """Plot the contribution of each PC."""
         sum_eigvals = sum(self.eigvals)
         eigvals = self.eigvals * 100 / sum_eigvals
         cum_eigvals = np.cumsum(eigvals)
@@ -206,7 +249,9 @@ class PCA:
             print("Error: you should choose only 3 bands [B, G, R]")
         else:
             # Creates a matrix with dimensions of original images
-            img = np.zeros([self.img_shape[0], self.img_shape[1], 3], dtype=np.uint8)
+            img = np.zeros(
+                [self.img_shape[0], self.img_shape[1], 3], dtype=np.uint8
+            )
             img[:, :, 0] = self.image_list[bands[0]] * 255
             img[:, :, 1] = self.image_list[bands[1]] * 255
             img[:, :, 2] = self.image_list[bands[2]] * 255
@@ -218,9 +263,14 @@ if __name__ == "__main__":
     import sys
 
     parser = argparse.ArgumentParser(description="Compute PCA.")
-    parser.add_argument("-i", "--input", type=str, help="Folder with images to be analysed.")
     parser.add_argument(
-        "-o", "--pcOut", type=str, help="Output folder where PCA images will be stored."
+        "-i", "--input", type=str, help="Folder with images to be analysed."
+    )
+    parser.add_argument(
+        "-o",
+        "--pcOut",
+        type=str,
+        help="Output folder where PCA images will be stored.",
     )
     parser.add_argument(
         "-rgb",
