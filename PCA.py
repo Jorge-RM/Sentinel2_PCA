@@ -8,11 +8,15 @@ import natsort
 import numpy as np
 import pandas as pd
 import scipy.linalg as la
+import seaborn as sns
 from pandas import DataFrame
 from PIL import Image, ImageOps
 
+# from sklearn.decomposition import PCA
+# from sklearn.preprocessing import StandardScaler
 
-class PCA:
+
+class OwnPCA:
     """PCA computing
 
     Args:
@@ -53,19 +57,34 @@ class PCA:
             self.matrix[:, i] = element
 
         cov_matrix = np.cov(self.matrix.transpose())
-        self.eigvals, self.eigvecs = la.eig(cov_matrix)
+        self.eigvals, self.eigvecs = np.linalg.eig(cov_matrix)
         order = self.eigvals.argsort()[::-1]  # Descending order
         self.eigvals = self.eigvals[order]
         self.eigvecs = self.eigvecs[:, order]
 
-    def calculate_pca(self, pc_folder, rgb_folder):
-        """PCA calculation.
+        for i, eigvec in enumerate(self.eigvecs.transpose()):
+            p = np.max(eigvec)
+            if np.max(eigvec) < 0.1:
+                self.eigvecs[:, i] = -eigvec
+
+        # pca_out = PCA().fit(self.matrix)
+        # self.eigvals = pca_out.explained_variance_
+        # self.eigvecs = pca_out.components_
+
+        print(
+            "Principal Components Computing finished for images at <"
+            + in_folder
+            + ">"
+        )
+
+    def get_projection(self, pc_folder, rgb_folder):
+        """Input images are projected over eigenvectors (principal component images).
 
         Args:
             pc_folder (str): Path to save PCA images.
             rgb_folder (str): Path to save false RGB images.
-
         """
+
         pc_img = np.zeros(
             (self.img_shape[0], self.img_shape[1]), dtype=np.float32
         )
@@ -83,159 +102,61 @@ class PCA:
             cv2.imwrite(img_path, pc_img)
 
             # Get the 3 bands with greater weighting for each PC
-            best_bands = np.transpose(self.eigvecs)[i].argsort()[::-1][:3]
+            best_bands = abs(np.transpose(self.eigvecs)[i]).argsort()[::-1][:3]
             # Create a false RGB image with them
             self.save_rgb(self.image_names[i], rgb_folder, best_bands)
 
-        return self.pcs
+        print("Save false RGB images at <" + rgb_folder + ">")
 
-    def write_pcs(self, excel_name):
-        """Write sorted eigenvectors in Excel file and get false RGB images."""
-        sheet = "PCs"
-        sheet_2 = "Sorted_PCs"
-        data_init = [0, 0]
-        writer = pd.ExcelWriter(excel_name, engine="xlsxwriter")
-        wb = writer.book
-        writer.sheets = {sheet: wb.add_worksheet(sheet)}
-        ws_pc = writer.sheets[sheet]
+    def get_variance(self, path, title):
+        """Plot eigenvectors on a heatmap.
 
-        # Colors
-        top_blue = "#92CDDC"
-        top_green = "#C4D79B"
-        mid_blue = "#B7DEE8"
-        mid_green = "#D8E4BC"
-        bot_blue = "#D5EEF3"
-        bot_green = "#EBF1DE"
-
-        # Format for titles at Sorted_PCs sheet
-        merge_format = wb.add_format(
-            {"bold": 1, "border": 1, "align": "center"}
+        Args:
+            path (str): Output folder.
+            title (str): Name of image.
+        """
+        var_set = [np.var(a) for a in self.matrix.transpose()]
+        fig, ax = plt.subplots()
+        ax.set(xlabel="Bandas", ylabel="Varianza")
+        ax.grid()
+        plt.xticks(range(1, self.n_bands + 1))
+        ax.plot(
+            range(1, self.n_bands + 1),
+            var_set,
+            "o",
+            linestyle="dotted",
         )
+        ax.tick_params(direction="out", length=10)
+        fig.savefig(path + "/" + title + "_var.png")
+        plt.close()
+        print("Save variance graph at <" + path + ">")
 
-        # WRITE EIGENVECTORS
-        col_df = ["Comp. " + str(i) for i in range(self.n_bands)]
-        row_df = ["Band " + str(i) for i in range(self.n_bands)]
-        vecs = np.round(np.array(self.eigvecs), 4)
-        eigvecs_df = DataFrame(data=vecs, columns=col_df, index=row_df)
-        eigvecs_df.to_excel(writer, sheet_name=sheet)
-
-        # Fit columns to longest cell text.
-        max_length = max(
-            [
-                max(
-                    [len(str(s)) for s in eigvecs_df[col].values]
-                    + [len(str(col))]
-                )
-                for col in eigvecs_df.columns
-            ]
-        )
-        ws_pc.set_column(0, self.n_bands + 1, max_length + 2)
-
-        # WRITE SORTED EIGENVECTORS
-        sorted_vecs = np.transpose(vecs)
-        index = list(range(self.n_bands))
-
-        for i, vec in enumerate(sorted_vecs):
-            sorted_df = DataFrame(
-                data=vec, columns=["Eigenvectors"], index=index
-            )
-            sorted_df = sorted_df.sort_values(
-                by=["Eigenvectors"], ascending=False
-            )
-            sorted_df = sorted_df.reset_index()
-            sorted_df = sorted_df.rename(columns={"index": "Bands"})
-
-            sorted_df.to_excel(
-                writer,
-                sheet_name=sheet_2,
-                startrow=1,
-                startcol=i * 2,
-                index=False,
-            )
-            ws_sort = writer.sheets[sheet_2]
-            ws_sort.merge_range(
-                0, i * 2, 0, i * 2 + 1, "PC " + str(i), merge_format
-            )
-
-            # Find the maximum length of the column names and values
-            max_length = max(
-                [
-                    max(
-                        [len(str(s)) for s in sorted_df[col].values]
-                        + [len(str(col))]
-                    )
-                    for col in sorted_df.columns
-                ]
-            )
-            ws_sort.set_column(i * 2, i * 2 + 1, max_length)
-
-            # If the cell is not blank, then the format is applied
-            if i % 2:
-                cell_format = wb.add_format({"bg_color": top_blue})
-                ws_sort.conditional_format(
-                    0,
-                    i * 2,
-                    0,
-                    i * 2 + 1,
-                    {"type": "no_blanks", "format": cell_format},
-                )
-
-                cell_format = wb.add_format({"bg_color": mid_blue})
-                ws_sort.conditional_format(
-                    1,
-                    i * 2,
-                    1,
-                    i * 2 + 1,
-                    {"type": "no_blanks", "format": cell_format},
-                )
-
-                cell_format = wb.add_format({"bg_color": bot_blue})
-                ws_sort.conditional_format(
-                    2,
-                    i * 2,
-                    14,
-                    i * 2 + 1,
-                    {"type": "no_blanks", "format": cell_format},
-                )
-            else:
-                cell_format = wb.add_format({"bg_color": top_green})
-                ws_sort.conditional_format(
-                    0,
-                    i * 2,
-                    0,
-                    i * 2 + 1,
-                    {"type": "no_blanks", "format": cell_format},
-                )
-
-                cell_format = wb.add_format({"bg_color": mid_green})
-                ws_sort.conditional_format(
-                    1,
-                    i * 2,
-                    1,
-                    i * 2 + 1,
-                    {"type": "no_blanks", "format": cell_format},
-                )
-
-                cell_format = wb.add_format({"bg_color": bot_green})
-                ws_sort.conditional_format(
-                    2,
-                    i * 2,
-                    14,
-                    i * 2 + 1,
-                    {"type": "no_blanks", "format": cell_format},
-                )
-
-        writer.save()
-
-    def show_pca_contributions(self):
+    def get_contributions(self):
         """Plot the contribution of each PC."""
-        sum_eigvals = sum(self.eigvals)
-        eigvals = self.eigvals * 100 / sum_eigvals
-        cum_eigvals = np.cumsum(eigvals)
-        plt.bar(range(len(eigvals)), eigvals)
+        cum_eigvals = np.cumsum(self.eigvals * 100 / sum(self.eigvals))
         plt.step(range(len(cum_eigvals)), cum_eigvals)
         name = os.path.basename(self.in_folder)
         plt.savefig(name + ".png")
+        print("Save Principal Components weight graph at <" + name + ">")
+
+    def get_heatmap(self, path, title):
+        """Plot eigenvectors on a heatmap.
+
+        Args:
+            path (str): Output folder.
+            title (str): Name of image.
+        """
+        col_df = ["PC" + str(i + 1) for i in range(self.n_bands)]
+        row_df = ["B" + str(i + 1) for i in range(self.n_bands)]
+        vecs = np.round(np.array(self.eigvecs), 2)
+        eigvecs_df = DataFrame(data=vecs, columns=col_df, index=row_df)
+        ax = sns.heatmap(eigvecs_df, annot=True, cmap="Spectral")
+        ax.set_title(title)
+        figure = ax.get_figure()
+        figure.set_size_inches(9, 6)
+        figure.savefig(path + "/" + title + ".png")
+        figure.clf()
+        print("Save Principal Components heatmap at <" + path + ">")
 
     def save_rgb(self, name, pc_folder, bands):
         """Create an RGB image with 3 selected bands.
@@ -252,9 +173,9 @@ class PCA:
             img = np.zeros(
                 [self.img_shape[0], self.img_shape[1], 3], dtype=np.uint8
             )
-            img[:, :, 0] = self.image_list[bands[0]] * 255
-            img[:, :, 1] = self.image_list[bands[1]] * 255
-            img[:, :, 2] = self.image_list[bands[2]] * 255
+            for b, band in enumerate(bands):
+                img[:, :, b] = self.image_list[band] * 255
+
             cv2.imwrite(pc_folder + "/" + name, img)
 
 
@@ -280,7 +201,6 @@ if __name__ == "__main__":
         "the 3 highest weighted images of each Principal Component.",
     )
     parser.add_argument("-b", "--bands", type=int, help="Number of bands.")
-    parser.add_argument("-e", "--excel", type=str, help="Excel file name.")
 
     if len(sys.argv) == 11:
         args = parser.parse_args()
@@ -288,10 +208,9 @@ if __name__ == "__main__":
         rgb_folder = args.rgbout
         in_folder = args.input
         bands = args.bands
-        excel_name = args.excel
-        pca = PCA(in_folder, bands)
-        pca.calculate_pca(pc_folder, rgb_folder)
-        pca.show_pca_contributions()
-        pca.write_pcs(excel_name)
+        pca = OwnPCA(in_folder, bands)
+        pca.get_projection(pc_folder, rgb_folder)
+        pca.get_contributions()
+
     else:
         print("Invalid number of arguments")
