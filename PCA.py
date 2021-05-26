@@ -1,19 +1,27 @@
-import glob
 import os
-from collections import namedtuple
+import time
 
 import cv2
 import matplotlib.pyplot as plt
 import natsort
 import numpy as np
 import pandas as pd
-import scipy.linalg as la
 import seaborn as sns
 from pandas import DataFrame
-from PIL import Image, ImageOps
 
 # from sklearn.decomposition import PCA
 # from sklearn.preprocessing import StandardScaler
+
+
+def timeit(method):
+    def timed(*args, **kw):
+        ts = time.time()
+        result = method(*args, **kw)
+        te = time.time()
+        print("%r (%r, %r) %2.5f sec" % (method.__name__, args, kw, te - ts))
+        return result
+
+    return timed
 
 
 class OwnPCA:
@@ -24,6 +32,7 @@ class OwnPCA:
         bands (int): Number of bands.
     """
 
+    @timeit
     def __init__(self, in_folder, bands):
         self.n_bands = bands
 
@@ -33,50 +42,43 @@ class OwnPCA:
         # Get images
         self.image_names = os.listdir(in_folder)
         self.image_names = natsort.natsorted(self.image_names)  # Sort images
-
         for image_name in self.image_names:
             img = cv2.imread(in_folder + "/" + image_name, cv2.IMREAD_ANYDEPTH)
+            # img3 = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
             self.image_list.append(img)
 
         # Save original shape
         self.img_shape = self.image_list[0].shape
 
-        self.matrix = np.zeros(
-            (self.image_list[0].size, self.n_bands), dtype=np.float32
-        )
+        self.matrix = np.zeros((self.image_list[0].size, self.n_bands), dtype=np.float32)
         # Data mean
         m_mean = np.array(self.image_list).mean()
         # Data standard deviation
         m_std = np.array(self.image_list).std()
 
+        # 2D to 1D
         for i, element in enumerate(self.image_list):
-            # 2D to 1D
             element = element.flatten()
             # Image standardization
             element = (element - m_mean) / m_std
             self.matrix[:, i] = element
 
-        cov_matrix = np.cov(self.matrix.transpose())
-        self.eigvals, self.eigvecs = np.linalg.eig(cov_matrix)
+        self.cov_mat = np.cov(self.matrix.transpose())
+        self.eigvals, self.eigvecs = np.linalg.eig(self.cov_mat)
         order = self.eigvals.argsort()[::-1]  # Descending order
         self.eigvals = self.eigvals[order]
         self.eigvecs = self.eigvecs[:, order]
-
         for i, eigvec in enumerate(self.eigvecs.transpose()):
             p = np.max(eigvec)
             if np.max(eigvec) < 0.1:
                 self.eigvecs[:, i] = -eigvec
 
-        # pca_out = PCA().fit(self.matrix)
-        # self.eigvals = pca_out.explained_variance_
-        # self.eigvecs = pca_out.components_
+        # PCs computing
+        self.pcs = np.matmul(self.matrix, self.eigvecs)
 
-        print(
-            "Principal Components Computing finished for images at <"
-            + in_folder
-            + ">"
-        )
+        print("Principal Components Computing finished for images at <" + in_folder + ">")
 
+    @timeit
     def get_projection(self, pc_folder, rgb_folder):
         """Input images are projected over eigenvectors (principal component images).
 
@@ -84,13 +86,7 @@ class OwnPCA:
             pc_folder (str): Path to save PCA images.
             rgb_folder (str): Path to save false RGB images.
         """
-
-        pc_img = np.zeros(
-            (self.img_shape[0], self.img_shape[1]), dtype=np.float32
-        )
-        # PCs computing
-        self.pcs = np.matmul(self.matrix, self.eigvecs)
-
+        pc_img = np.zeros((self.img_shape[0], self.img_shape[1]), dtype=np.float32)
         for i, pc in enumerate(np.transpose(self.pcs)):
             img_path = pc_folder + "/" + self.image_names[i]
             # Resize PC from 1-Dimension to 2-Dimension with original images shape
@@ -100,83 +96,284 @@ class OwnPCA:
                 resized_pc, pc_img, 0, 1, cv2.NORM_MINMAX, dtype=cv2.CV_32F
             )
             cv2.imwrite(img_path, pc_img)
+        print("Save PC images at <" + img_path + ">")
 
-            # Get the 3 bands with greater weighting for each PC
-            best_bands = abs(np.transpose(self.eigvecs)[i]).argsort()[::-1][:3]
-            # Create a false RGB image with them
-            self.save_rgb(self.image_names[i], rgb_folder, best_bands)
-
-        print("Save false RGB images at <" + rgb_folder + ">")
-
+    @timeit
     def get_variance(self, path, title):
-        """Plot eigenvectors on a heatmap.
+        """Get variance of input images.
 
         Args:
             path (str): Output folder.
             title (str): Name of image.
         """
-        var_set = [np.var(a) for a in self.matrix.transpose()]
+        self.variances = [np.var(a) for a in self.image_list]
+        print("Variance: " + str(sum(self.variances)))
+        print("Eigvals: " + str(sum(self.eigvals)))
+        label = ["1", "2", "3", "4", "5", "6", "7", "8", "8A", "9", "11", "12"]
         fig, ax = plt.subplots()
-        ax.set(xlabel="Bandas", ylabel="Varianza")
         ax.grid()
-        plt.xticks(range(1, self.n_bands + 1))
-        ax.plot(
-            range(1, self.n_bands + 1),
-            var_set,
-            "o",
-            linestyle="dotted",
-        )
+        plt.xticks(range(self.n_bands), label, fontsize=13)
+        plt.yticks(fontsize=13)
+        ax.set_xlabel("Bands", fontsize=13)
+        ax.set_ylabel("Variance", fontsize=13)
+        ax.plot(range(self.n_bands), self.variances, "o", linestyle="dotted", markersize=9)
+        ax.set_title("Variance of " + title + " images", fontsize=15)
         ax.tick_params(direction="out", length=10)
-        fig.savefig(path + "/" + title + "_var.png")
+        fig.savefig(path + "/" + title + "_var.png", bbox_inches="tight", dpi=100)
         plt.close()
         print("Save variance graph at <" + path + ">")
 
-    def get_contributions(self):
-        """Plot the contribution of each PC."""
-        cum_eigvals = np.cumsum(self.eigvals * 100 / sum(self.eigvals))
-        plt.step(range(len(cum_eigvals)), cum_eigvals)
-        name = os.path.basename(self.in_folder)
-        plt.savefig(name + ".png")
-        print("Save Principal Components weight graph at <" + name + ">")
+    @timeit
+    def get_excel(self, excel_name):
+        """Write sorted eigenvectors in Excel file and get false RGB images."""
+        sheet = "PCs"
+        sheet_2 = "Sorted_PCs"
+        data_init = [0, 0]
+        writer = pd.ExcelWriter(excel_name, engine="xlsxwriter")
+        wb = writer.book
+        writer.sheets = {sheet: wb.add_worksheet(sheet)}
+        ws_pc = writer.sheets[sheet]
 
-    def get_heatmap(self, path, title):
+        # Colors
+        top_blue = "#92CDDC"
+        top_green = "#C4D79B"
+        mid_blue = "#B7DEE8"
+        mid_green = "#D8E4BC"
+        bot_blue = "#D5EEF3"
+        bot_green = "#EBF1DE"
+
+        # Format for titles at Sorted_PCs sheet
+        merge_format = wb.add_format({"bold": 1, "border": 1, "align": "center"})
+
+        # WRITE EIGENVECTORS
+        col_df = ["Comp. " + str(i) for i in range(self.n_bands)]
+        row_df = ["Band " + str(i) for i in range(self.n_bands)]
+        vecs = np.round(np.array(self.eigvecs), 3)
+        eigvecs_df = DataFrame(data=vecs, columns=col_df, index=row_df)
+        eigvecs_df.to_excel(writer, sheet_name=sheet)
+
+        # Fit columns to longest cell text.
+        max_length = max(
+            [
+                max([len(str(s)) for s in eigvecs_df[col].values] + [len(str(col))])
+                for col in eigvecs_df.columns
+            ]
+        )
+        ws_pc.set_column(0, self.n_bands + 1, max_length + 2)
+
+        # WRITE SORTED EIGENVECTORS
+        sorted_vecs = np.transpose(vecs)
+        index = list(range(self.n_bands))
+
+        for i, vec in enumerate(sorted_vecs):
+            sorted_df = DataFrame(data=vec, columns=["Eigenvectors"], index=index)
+            sorted_df = sorted_df.sort_values(by=["Eigenvectors"], ascending=False)
+            sorted_df = sorted_df.reset_index()
+            sorted_df = sorted_df.rename(columns={"index": "Bands"})
+
+            sorted_df.to_excel(
+                writer,
+                sheet_name=sheet_2,
+                startrow=1,
+                startcol=i * 2,
+                index=False,
+            )
+            ws_sort = writer.sheets[sheet_2]
+            ws_sort.merge_range(0, i * 2, 0, i * 2 + 1, "PC " + str(i), merge_format)
+
+            # Find the maximum length of the column names and values
+            max_length = max(
+                [
+                    max([len(str(s)) for s in sorted_df[col].values] + [len(str(col))])
+                    for col in sorted_df.columns
+                ]
+            )
+            ws_sort.set_column(i * 2, i * 2 + 1, max_length)
+
+            # If the cell is not blank, then the format is applied
+            if i % 2:
+                cell_format = wb.add_format({"bg_color": top_blue})
+                ws_sort.conditional_format(
+                    0,
+                    i * 2,
+                    0,
+                    i * 2 + 1,
+                    {"type": "no_blanks", "format": cell_format},
+                )
+
+                cell_format = wb.add_format({"bg_color": mid_blue})
+                ws_sort.conditional_format(
+                    1,
+                    i * 2,
+                    1,
+                    i * 2 + 1,
+                    {"type": "no_blanks", "format": cell_format},
+                )
+
+                cell_format = wb.add_format({"bg_color": bot_blue})
+                ws_sort.conditional_format(
+                    2,
+                    i * 2,
+                    14,
+                    i * 2 + 1,
+                    {"type": "no_blanks", "format": cell_format},
+                )
+            else:
+                cell_format = wb.add_format({"bg_color": top_green})
+                ws_sort.conditional_format(
+                    0,
+                    i * 2,
+                    0,
+                    i * 2 + 1,
+                    {"type": "no_blanks", "format": cell_format},
+                )
+
+                cell_format = wb.add_format({"bg_color": mid_green})
+                ws_sort.conditional_format(
+                    1,
+                    i * 2,
+                    1,
+                    i * 2 + 1,
+                    {"type": "no_blanks", "format": cell_format},
+                )
+
+                cell_format = wb.add_format({"bg_color": bot_green})
+                ws_sort.conditional_format(
+                    2,
+                    i * 2,
+                    14,
+                    i * 2 + 1,
+                    {"type": "no_blanks", "format": cell_format},
+                )
+
+        writer.save()
+
+    @timeit
+    def get_eigvecs(self, path, title):
         """Plot eigenvectors on a heatmap.
 
         Args:
             path (str): Output folder.
             title (str): Name of image.
         """
+        row_df = [
+            "B1",
+            "B2",
+            "B3",
+            "B4",
+            "B5",
+            "B6",
+            "B7",
+            "B8",
+            "B8A",
+            "B9",
+            "B11",
+            "B12",
+        ]
         col_df = ["PC" + str(i + 1) for i in range(self.n_bands)]
-        row_df = ["B" + str(i + 1) for i in range(self.n_bands)]
         vecs = np.round(np.array(self.eigvecs), 2)
         eigvecs_df = DataFrame(data=vecs, columns=col_df, index=row_df)
-        ax = sns.heatmap(eigvecs_df, annot=True, cmap="Spectral")
-        ax.set_title(title)
-        figure = ax.get_figure()
-        figure.set_size_inches(9, 6)
-        figure.savefig(path + "/" + title + ".png")
-        figure.clf()
+        plt.subplots(figsize=(9, 6))
+        ax = sns.heatmap(
+            eigvecs_df, annot=True, cmap="bwr", linewidths=0.5, vmin=-1, vmax=1
+        )
+        ax.set_title("Eigenvectors of " + title + " images")
+        plt.savefig(path + "/" + title + "_eigvecs.png", bbox_inches="tight", dpi=100)
+        plt.close()
         print("Save Principal Components heatmap at <" + path + ">")
 
-    def save_rgb(self, name, pc_folder, bands):
-        """Create an RGB image with 3 selected bands.
+    def get_best_eigvecs(self, path, title):
+        """Plot eigenvectors on a heatmap.
 
         Args:
-            name (str): Name of image.
-            pc_folder (str): Output folder.
-            bands (list): list of 3 bands to create an image with 3 channels (B, G, R)
+            path (str): Output folder.
+            title (str): Name of image.
         """
-        if len(bands) != 3:
-            print("Error: you should choose only 3 bands [B, G, R]")
-        else:
-            # Creates a matrix with dimensions of original images
-            img = np.zeros(
-                [self.img_shape[0], self.img_shape[1], 3], dtype=np.uint8
-            )
-            for b, band in enumerate(bands):
-                img[:, :, b] = self.image_list[band] * 255
+        row_df = [
+            "B1",
+            "B2",
+            "B3",
+            "B4",
+            "B5",
+            "B6",
+            "B7",
+            "B8",
+            "B8A",
+            "B9",
+            "B11",
+            "B12",
+        ]
+        vals = []
+        eigvals_weighting = self.eigvals * 100 / sum(self.eigvals)
+        for n, v in enumerate(eigvals_weighting):
+            vals.append(v)
+            if sum(vals) >= 98:
+                break
 
-            cv2.imwrite(pc_folder + "/" + name, img)
+        n_vals = len(vals)
+        col_df = ["PC" + str(i + 1) for i in range(n_vals)]
+        vecs = np.round(np.array(self.eigvecs[:, :n_vals]), 2)
+        eigvecs_df = DataFrame(data=vecs, columns=col_df, index=row_df)
+        plt.subplots(figsize=(6, 9))
+        ax = sns.heatmap(
+            eigvecs_df,
+            annot=True,
+            cmap="bwr",
+            vmin=-1,
+            vmax=1,
+            annot_kws={"fontsize": 15},
+        )
+        ax.collections[0].colorbar.ax.tick_params(labelsize=15)
+        ax.set_title("MWE of " + title + " images", fontsize=14)
+        ax.tick_params(labelsize=15)
+        plt.savefig(path + "/" + title + "_weigvecs.png", bbox_inches="tight", dpi=100)
+        plt.close()
+        print("Save Principal Components heatmap at <" + path + ">")
+
+    @timeit
+    def get_correlation(self, path, title):
+        """Plot eigenvectors on a heatmap.
+
+        Args:
+            path (str): Output folder.
+            title (str): Name of image.
+        """
+        labels = [
+            "B1",
+            "B2",
+            "B3",
+            "B4",
+            "B5",
+            "B6",
+            "B7",
+            "B8",
+            "B8A",
+            "B9",
+            "B11",
+            "B12",
+        ]
+        data = DataFrame(data=self.matrix)
+        self.correlations = data.corr()
+        mask = np.triu(np.ones_like(self.correlations, dtype=bool))
+        plt.subplots(figsize=(9, 6))
+        ax = sns.heatmap(
+            self.correlations,
+            xticklabels=labels,
+            yticklabels=labels,
+            mask=mask,
+            annot=True,
+            cmap="viridis_r",
+            cbar_kws={"orientation": "horizontal"},
+            vmin=-1,
+            vmax=1,
+        )
+        ax.collections[0].colorbar.ax.tick_params(labelsize=13)
+        plt.yticks(fontsize=13)
+        plt.xticks(fontsize=13)
+        ax.set_title("Correlation matrix of " + title + " images", fontsize=15)
+        plt.savefig(path + "/" + title + "_corr.png", bbox_inches="tight", dpi=100)
+        plt.close()
+        print("Save Correlation matrix heatmap at <" + path + ">")
 
 
 if __name__ == "__main__":
@@ -210,7 +407,6 @@ if __name__ == "__main__":
         bands = args.bands
         pca = OwnPCA(in_folder, bands)
         pca.get_projection(pc_folder, rgb_folder)
-        pca.get_contributions()
 
     else:
         print("Invalid number of arguments")
