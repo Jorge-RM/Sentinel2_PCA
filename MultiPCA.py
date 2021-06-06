@@ -45,78 +45,21 @@ class MultiPCA:
 
         """
         pca_folder = os.path.join(out_container, "PCS")
-        rgb_folder = os.path.join(out_container, "PCS_RGB")
         folder_names=[]
         for pca, folder in zip(self.pca_list, self.folders_path):
             folder_name = os.path.basename(folder)
             local_pca_folder = os.path.join(pca_folder, folder_name)
-            local_rgb_folder = os.path.join(rgb_folder, folder_name)
             if not os.path.isdir(local_pca_folder):
                 os.makedirs(local_pca_folder)
-            if not os.path.isdir(local_rgb_folder):
-                os.makedirs(local_rgb_folder)
             folder_names.append(folder_name)
-            pca.get_projection(local_pca_folder, local_rgb_folder)
+            pca.get_projection(local_pca_folder)
             pca.get_eigvecs(out_container, folder_name)
             pca.get_variance(out_container, folder_name)
             pca.get_correlation(out_container, folder_name)
             pca.get_best_eigvecs(out_container, folder_name)
-            #excel_file = os.path.join(out_container, folder_name) + ".xlsx"
-            #pca.get_excel(excel_file)
-        mean_vars = [np.mean(pca.variances) for pca in self.pca_list]
-        mean_cors = [np.mean(pca.correlations)[1] for pca in self.pca_list]
-        self.get_variances(mean_vars, mean_cors, folder_names, out_container)
+            excel_file = os.path.join(out_container, folder_name) + ".xlsx"
+            pca.get_excel(excel_file)
         self.get_weighting(out_container)
-
-    def get_variances(self, mean_vars, mean_cors, folder_names, out_container):
-        """Get variance of input images.
-
-        Args:
-            path (str): Output folder.
-            title (str): Name of image.
-        """
-        fig, ax = plt.subplots()
-        ax2 = ax.twinx()
-        w=0.4
-
-        bar1=np.arange(len(folder_names))
-        bar2 = [i+w for i in bar1]
-
-        ax.set_ylabel("Variance", fontsize=13)
-        ax2.set_ylabel("Correlation", fontsize=13)
-
-        ax.bar(bar1, mean_vars, w, color='b', align='center')
-        ax2.bar(bar2, mean_cors, w, color='r', align='center')
-        plt.xticks(range(len(folder_names)), folder_names, fontsize=10, rotation='vertical')
-        plt.yticks(fontsize=13)
-
-        ax.set_title("Mean variances of " + os.path.basename(out_container) + " images", fontsize=15)
-        ax.tick_params(direction="out", length=10)
-        fig.savefig(out_container + "/" + os.path.basename(out_container) + "_meanvar.png", bbox_inches="tight", dpi=100)
-        plt.close()
-        print("Save variance graph at <" + os.path.basename(out_container) + ">")
-
-
-        """
-        x = np.arange(10)
-        ax1 = plt.subplot(1,1,1)
-        w = 0.3
-        #plt.xticks(), will label the bars on x axis with the respective country names.
-        plt.xticks(x + w /2, datasort['country'], rotation='vertical')
-        pop =ax1.bar(x, datasort['population']/ 10 ** 6, width=w, color='b', align='center')
-        #The trick is to use two different axes that share the same x axis, we have used ax1.twinx() method.
-        ax2 = ax1.twinx()
-        #We have calculated GDP by dividing gdpPerCapita to population.
-        gdp =ax2.bar(x + w, datasort['gdpPerCapita'] * datasort.population / 10**9, width=w,color='g',align='center')
-        #Set the Y axis label as GDP.
-        plt.ylabel('GDP')
-        #To set the legend on the plot we have used plt.legend()
-        plt.legend([pop, gdp],['Population in Millions', 'GDP in Billions'])
-        #To show the plot finally we have used plt.show().
-        plt.show()
-        """
-
-
 
     def get_weighting(self, out_container):
         """Save a graph with weightings of every principal component computed. """
@@ -150,7 +93,7 @@ if __name__ == "__main__":
     import argparse
     import sys
 
-    parser = argparse.ArgumentParser(description="Compute PCA.")
+    parser = argparse.ArgumentParser(description="Compute PCA from multiple folders.")
     parser.add_argument(
         "-i",
         "--input",

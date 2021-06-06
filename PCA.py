@@ -9,9 +9,6 @@ import pandas as pd
 import seaborn as sns
 from pandas import DataFrame
 
-# from sklearn.decomposition import PCA
-# from sklearn.preprocessing import StandardScaler
-
 
 def timeit(method):
     def timed(*args, **kw):
@@ -44,7 +41,7 @@ class OwnPCA:
         self.image_names = natsort.natsorted(self.image_names)  # Sort images
         for image_name in self.image_names:
             img = cv2.imread(in_folder + "/" + image_name, cv2.IMREAD_ANYDEPTH)
-            # img3 = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+            #img = cv2.resize(img, (int(img.shape[0]/2), int(img.shape[1]/2)))
             self.image_list.append(img)
 
         # Save original shape
@@ -79,12 +76,11 @@ class OwnPCA:
         print("Principal Components Computing finished for images at <" + in_folder + ">")
 
     @timeit
-    def get_projection(self, pc_folder, rgb_folder):
+    def get_projection(self, pc_folder):
         """Input images are projected over eigenvectors (principal component images).
 
         Args:
             pc_folder (str): Path to save PCA images.
-            rgb_folder (str): Path to save false RGB images.
         """
         pc_img = np.zeros((self.img_shape[0], self.img_shape[1]), dtype=np.float32)
         for i, pc in enumerate(np.transpose(self.pcs)):
@@ -107,8 +103,6 @@ class OwnPCA:
             title (str): Name of image.
         """
         self.variances = [np.var(a) for a in self.image_list]
-        print("Variance: " + str(sum(self.variances)))
-        print("Eigvals: " + str(sum(self.eigvals)))
         label = ["1", "2", "3", "4", "5", "6", "7", "8", "8A", "9", "11", "12"]
         fig, ax = plt.subplots()
         ax.grid()
@@ -354,6 +348,7 @@ class OwnPCA:
         ]
         data = DataFrame(data=self.matrix)
         self.correlations = data.corr()
+        self.correlations = np.round(np.array(self.correlations), 2)
         mask = np.triu(np.ones_like(self.correlations, dtype=bool))
         plt.subplots(figsize=(9, 6))
         ax = sns.heatmap(
@@ -363,7 +358,7 @@ class OwnPCA:
             mask=mask,
             annot=True,
             cmap="viridis_r",
-            cbar_kws={"orientation": "horizontal"},
+            #cbar_kws={"orientation": "horizontal"},
             vmin=-1,
             vmax=1,
         )
@@ -390,23 +385,15 @@ if __name__ == "__main__":
         type=str,
         help="Output folder where PCA images will be stored.",
     )
-    parser.add_argument(
-        "-rgb",
-        "--rgbOut",
-        type=str,
-        help="Output folder where false RGB images composed with"
-        "the 3 highest weighted images of each Principal Component.",
-    )
     parser.add_argument("-b", "--bands", type=int, help="Number of bands.")
 
-    if len(sys.argv) == 11:
+    if len(sys.argv) == 6:
         args = parser.parse_args()
         pc_folder = args.pcout
-        rgb_folder = args.rgbout
         in_folder = args.input
         bands = args.bands
         pca = OwnPCA(in_folder, bands)
-        pca.get_projection(pc_folder, rgb_folder)
+        pca.get_projection(pc_folder)
 
     else:
         print("Invalid number of arguments")
