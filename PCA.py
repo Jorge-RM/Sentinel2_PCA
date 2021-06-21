@@ -106,20 +106,7 @@ class OwnPCA:
             title (str): Name of image.
         """
         self.variances = [np.var(a) for a in self.image_list]
-        label = [
-            "1",
-            "2",
-            "3",
-            "4",
-            "5",
-            "6",
-            "7",
-            "8",
-            "8A",
-            "9",
-            "11",
-            "12",
-        ]
+        label = ["B" + str(i) for i in range(1, self.n_bands + 1)]
         fig, ax = plt.subplots()
         ax.grid()
         plt.xticks(range(self.n_bands), label, fontsize=13)
@@ -164,8 +151,8 @@ class OwnPCA:
         )
 
         # WRITE EIGENVECTORS
-        col_df = ["Comp. " + str(i) for i in range(self.n_bands)]
-        row_df = ["Band " + str(i) for i in range(self.n_bands)]
+        col_df = ["Comp. " + str(i) for i in range(1, self.n_bands + 1)]
+        row_df = ["Band " + str(i) for i in range(1, self.n_bands + 1)]
         vecs = np.round(np.array(self.eigvecs), 3)
         eigvecs_df = DataFrame(data=vecs, columns=col_df, index=row_df)
         eigvecs_df.to_excel(writer, sheet_name=sheet)
@@ -286,20 +273,7 @@ class OwnPCA:
             path (str): Output folder.
             title (str): Name of image.
         """
-        row_df = [
-            "B1",
-            "B2",
-            "B3",
-            "B4",
-            "B5",
-            "B6",
-            "B7",
-            "B8",
-            "B8A",
-            "B9",
-            "B11",
-            "B12",
-        ]
+        row_df = ["B" + str(i) for i in range(1, self.n_bands + 1)]
         col_df = ["PC" + str(i + 1) for i in range(self.n_bands)]
         vecs = np.round(np.array(self.eigvecs), 2)
         eigvecs_df = DataFrame(data=vecs, columns=col_df, index=row_df)
@@ -321,22 +295,10 @@ class OwnPCA:
             path (str): Output folder.
             title (str): Name of image.
         """
-        row_df = [
-            "B1",
-            "B2",
-            "B3",
-            "B4",
-            "B5",
-            "B6",
-            "B7",
-            "B8",
-            "B8A",
-            "B9",
-            "B11",
-            "B12",
-        ]
+        label = ["B" + str(i) for i in range(1, self.n_bands + 1)]
         vals = []
         eigvals_weighting = self.eigvals * 100 / sum(self.eigvals)
+        # 98% Criteria
         for n, v in enumerate(eigvals_weighting):
             vals.append(v)
             if sum(vals) >= 98:
@@ -345,7 +307,7 @@ class OwnPCA:
         n_vals = len(vals)
         col_df = ["PC" + str(i + 1) for i in range(n_vals)]
         vecs = np.round(np.array(self.eigvecs[:, :n_vals]), 2)
-        eigvecs_df = DataFrame(data=vecs, columns=col_df, index=row_df)
+        eigvecs_df = DataFrame(data=vecs, columns=col_df, index=label)
         plt.subplots(figsize=(6, 9))
         ax = sns.heatmap(
             eigvecs_df,
@@ -372,20 +334,7 @@ class OwnPCA:
             path (str): Output folder.
             title (str): Name of image.
         """
-        labels = [
-            "B1",
-            "B2",
-            "B3",
-            "B4",
-            "B5",
-            "B6",
-            "B7",
-            "B8",
-            "B8A",
-            "B9",
-            "B11",
-            "B12",
-        ]
+        label = ["B" + str(i) for i in range(1, self.n_bands + 1)]
         data = DataFrame(data=self.matrix)
         self.correlations = data.corr()
         self.correlations = np.round(np.array(self.correlations), 2)
@@ -395,8 +344,8 @@ class OwnPCA:
         plt.subplots(figsize=(9, 6))
         ax = sns.heatmap(
             self.correlations,
-            xticklabels=labels,
-            yticklabels=labels,
+            xticklabels=label,
+            yticklabels=label,
             mask=mask,
             annot=True,
             cmap="viridis_r",
