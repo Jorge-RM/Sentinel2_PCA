@@ -6,7 +6,8 @@ import MultiPCA
 if __name__ == "__main__":
     import argparse
     import sys
-    ti=time.time()
+
+    ti = time.time()
     parser = argparse.ArgumentParser(description="Compute MultiPCA.")
     parser.add_argument(
         "-i",
@@ -29,6 +30,5 @@ if __name__ == "__main__":
             out_path = os.path.join(out_container, folder)
             pca = MultiPCA.MultiPCA(in_path, bands)
             pca.save_data(out_path)
-    te=time.time()
-    print("Total time elapsed: %2.2f" % (te-ti))
-
+    te = time.time()
+    print("Total time elapsed: %2.2f" % (te - ti))

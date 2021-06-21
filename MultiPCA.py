@@ -1,5 +1,6 @@
 import os
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 from pandas import DataFrame
@@ -17,7 +18,6 @@ class MultiPCA:
     """
 
     def __init__(self, container, bands):
-
         self.n_bands = bands
         self.pca_list = []
         # List of folders in Main container
@@ -45,7 +45,7 @@ class MultiPCA:
 
         """
         pca_folder = os.path.join(out_container, "PCS")
-        folder_names=[]
+        folder_names = []
         for pca, folder in zip(self.pca_list, self.folders_path):
             folder_name = os.path.basename(folder)
             local_pca_folder = os.path.join(pca_folder, folder_name)
@@ -57,8 +57,9 @@ class MultiPCA:
             pca.get_variance(out_container, folder_name)
             pca.get_correlation(out_container, folder_name)
             pca.get_best_eigvecs(out_container, folder_name)
-            excel_file = os.path.join(out_container, folder_name) + ".xlsx"
-            pca.get_excel(excel_file)
+            pca.get_rgb(out_container, folder_name, [1, 2, 3])
+            # excel_file = os.path.join(out_container, folder_name) + ".xlsx"
+            # pca.get_excel(excel_file)
         self.get_weighting(out_container)
 
     def get_weighting(self, out_container):
@@ -83,8 +84,7 @@ class MultiPCA:
         ax.legend()
         fig.savefig(
             out_container + "\\" + os.path.basename(out_container) + ".png",
-            bbox_inches="tight",
-            dpi=100,
+            bbox_inches="tight"
         )
         plt.close()
 
@@ -93,14 +93,18 @@ if __name__ == "__main__":
     import argparse
     import sys
 
-    parser = argparse.ArgumentParser(description="Compute PCA from multiple folders.")
+    parser = argparse.ArgumentParser(
+        description="Compute PCA from multiple folders."
+    )
     parser.add_argument(
         "-i",
         "--input",
         type=str,
         help="Folder container of folders with hyperspectral images.",
     )
-    parser.add_argument("-o", "--output", type=str, help="Output folder to save data.")
+    parser.add_argument(
+        "-o", "--output", type=str, help="Output folder to save data."
+    )
     parser.add_argument("-b", "--bands", type=int, help="Number of bands.")
 
     if len(sys.argv) == 7:

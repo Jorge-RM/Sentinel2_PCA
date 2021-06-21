@@ -41,27 +41,24 @@ class OwnPCA:
         self.image_names = natsort.natsorted(self.image_names)  # Sort images
         for image_name in self.image_names:
             img = cv2.imread(in_folder + "/" + image_name, cv2.IMREAD_ANYDEPTH)
-            #img = cv2.resize(img, (int(img.shape[0]/2), int(img.shape[1]/2)))
             self.image_list.append(img)
 
         # Save original shape
         self.img_shape = self.image_list[0].shape
 
-        self.matrix = np.zeros((self.image_list[0].size, self.n_bands), dtype=np.float32)
-        # Data mean
-        m_mean = np.array(self.image_list).mean()
-        # Data standard deviation
-        m_std = np.array(self.image_list).std()
+        self.matrix = np.zeros(
+            (self.image_list[0].size, self.n_bands), dtype=np.float32
+        )
 
         # 2D to 1D
         for i, element in enumerate(self.image_list):
             element = element.flatten()
-            # Image standardization
-            element = (element - m_mean) / m_std
             self.matrix[:, i] = element
 
         self.cov_mat = np.cov(self.matrix.transpose())
+        # self.correlation = np.corrcoef(self.matrix.transpose())
         self.eigvals, self.eigvecs = np.linalg.eig(self.cov_mat)
+        # self.eigvals, self.eigvecs = np.linalg.eig(self.correlation)
         order = self.eigvals.argsort()[::-1]  # Descending order
         self.eigvals = self.eigvals[order]
         self.eigvecs = self.eigvecs[:, order]
@@ -73,7 +70,11 @@ class OwnPCA:
         # PCs computing
         self.pcs = np.matmul(self.matrix, self.eigvecs)
 
-        print("Principal Components Computing finished for images at <" + in_folder + ">")
+        print(
+            "Principal Components Computing finished for images at <"
+            + in_folder
+            + ">"
+        )
 
     @timeit
     def get_projection(self, pc_folder):
@@ -82,7 +83,9 @@ class OwnPCA:
         Args:
             pc_folder (str): Path to save PCA images.
         """
-        pc_img = np.zeros((self.img_shape[0], self.img_shape[1]), dtype=np.float32)
+        pc_img = np.zeros(
+            (self.img_shape[0], self.img_shape[1]), dtype=np.float32
+        )
         for i, pc in enumerate(np.transpose(self.pcs)):
             img_path = pc_folder + "/" + self.image_names[i]
             # Resize PC from 1-Dimension to 2-Dimension with original images shape
@@ -103,17 +106,36 @@ class OwnPCA:
             title (str): Name of image.
         """
         self.variances = [np.var(a) for a in self.image_list]
-        label = ["1", "2", "3", "4", "5", "6", "7", "8", "8A", "9", "11", "12"]
+        label = [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "8A",
+            "9",
+            "11",
+            "12",
+        ]
         fig, ax = plt.subplots()
         ax.grid()
         plt.xticks(range(self.n_bands), label, fontsize=13)
         plt.yticks(fontsize=13)
         ax.set_xlabel("Bands", fontsize=13)
         ax.set_ylabel("Variance", fontsize=13)
-        ax.plot(range(self.n_bands), self.variances, "o", linestyle="dotted", markersize=9)
+        ax.plot(
+            range(self.n_bands),
+            self.variances,
+            "o",
+            linestyle="dotted",
+            markersize=9,
+        )
         ax.set_title("Variance of " + title + " images", fontsize=15)
         ax.tick_params(direction="out", length=10)
-        fig.savefig(path + "/" + title + "_var.png", bbox_inches="tight", dpi=100)
+        fig.savefig(path + "/" + title + "_var.png", bbox_inches="tight")
         plt.close()
         print("Save variance graph at <" + path + ">")
 
@@ -137,7 +159,9 @@ class OwnPCA:
         bot_green = "#EBF1DE"
 
         # Format for titles at Sorted_PCs sheet
-        merge_format = wb.add_format({"bold": 1, "border": 1, "align": "center"})
+        merge_format = wb.add_format(
+            {"bold": 1, "border": 1, "align": "center"}
+        )
 
         # WRITE EIGENVECTORS
         col_df = ["Comp. " + str(i) for i in range(self.n_bands)]
@@ -149,7 +173,10 @@ class OwnPCA:
         # Fit columns to longest cell text.
         max_length = max(
             [
-                max([len(str(s)) for s in eigvecs_df[col].values] + [len(str(col))])
+                max(
+                    [len(str(s)) for s in eigvecs_df[col].values]
+                    + [len(str(col))]
+                )
                 for col in eigvecs_df.columns
             ]
         )
@@ -160,8 +187,12 @@ class OwnPCA:
         index = list(range(self.n_bands))
 
         for i, vec in enumerate(sorted_vecs):
-            sorted_df = DataFrame(data=vec, columns=["Eigenvectors"], index=index)
-            sorted_df = sorted_df.sort_values(by=["Eigenvectors"], ascending=False)
+            sorted_df = DataFrame(
+                data=vec, columns=["Eigenvectors"], index=index
+            )
+            sorted_df = sorted_df.sort_values(
+                by=["Eigenvectors"], ascending=False
+            )
             sorted_df = sorted_df.reset_index()
             sorted_df = sorted_df.rename(columns={"index": "Bands"})
 
@@ -173,12 +204,17 @@ class OwnPCA:
                 index=False,
             )
             ws_sort = writer.sheets[sheet_2]
-            ws_sort.merge_range(0, i * 2, 0, i * 2 + 1, "PC " + str(i), merge_format)
+            ws_sort.merge_range(
+                0, i * 2, 0, i * 2 + 1, "PC " + str(i), merge_format
+            )
 
             # Find the maximum length of the column names and values
             max_length = max(
                 [
-                    max([len(str(s)) for s in sorted_df[col].values] + [len(str(col))])
+                    max(
+                        [len(str(s)) for s in sorted_df[col].values]
+                        + [len(str(col))]
+                    )
                     for col in sorted_df.columns
                 ]
             )
@@ -272,7 +308,9 @@ class OwnPCA:
             eigvecs_df, annot=True, cmap="bwr", linewidths=0.5, vmin=-1, vmax=1
         )
         ax.set_title("Eigenvectors of " + title + " images")
-        plt.savefig(path + "/" + title + "_eigvecs.png", bbox_inches="tight", dpi=100)
+        plt.savefig(
+            path + "/" + title + "_eigvecs.png", bbox_inches="tight", dpi=100
+        )
         plt.close()
         print("Save Principal Components heatmap at <" + path + ">")
 
@@ -320,7 +358,9 @@ class OwnPCA:
         ax.collections[0].colorbar.ax.tick_params(labelsize=15)
         ax.set_title("MWE of " + title + " images", fontsize=14)
         ax.tick_params(labelsize=15)
-        plt.savefig(path + "/" + title + "_weigvecs.png", bbox_inches="tight", dpi=100)
+        plt.savefig(
+            path + "/" + title + "_weigvecs.png", bbox_inches="tight", dpi=100
+        )
         plt.close()
         print("Save Principal Components heatmap at <" + path + ">")
 
@@ -350,6 +390,8 @@ class OwnPCA:
         self.correlations = data.corr()
         self.correlations = np.round(np.array(self.correlations), 2)
         mask = np.triu(np.ones_like(self.correlations, dtype=bool))
+        sheet = "Correlation Matrix"
+        data_init = [0, 0]
         plt.subplots(figsize=(9, 6))
         ax = sns.heatmap(
             self.correlations,
@@ -358,7 +400,6 @@ class OwnPCA:
             mask=mask,
             annot=True,
             cmap="viridis_r",
-            #cbar_kws={"orientation": "horizontal"},
             vmin=-1,
             vmax=1,
         )
@@ -366,9 +407,41 @@ class OwnPCA:
         plt.yticks(fontsize=13)
         plt.xticks(fontsize=13)
         ax.set_title("Correlation matrix of " + title + " images", fontsize=15)
-        plt.savefig(path + "/" + title + "_corr.png", bbox_inches="tight", dpi=100)
+        plt.savefig(
+            path + "/" + title + "_corr.png", bbox_inches="tight", dpi=100
+        )
         plt.close()
         print("Save Correlation matrix heatmap at <" + path + ">")
+
+    def get_rgb(self, pc_folder, name, rgb_vec):
+        """Create an RGB image.
+
+        Args:
+            pc_folder (str): Output folder.
+            name (str): Name of image.
+            rgb_vec (list): vector of bands
+        """
+        # Creates a matrix with dimensions of original images
+        img = np.ones(
+            [self.img_shape[0], self.img_shape[1], 3], dtype=np.float32
+        )
+        finalImg = np.zeros(
+            [self.img_shape[0], self.img_shape[1], 3], dtype=np.uint8
+        )
+        cv2.merge(
+            [
+                self.image_list[rgb_vec[0]],
+                self.image_list[rgb_vec[1]],
+                self.image_list[rgb_vec[2]],
+            ],
+            img,
+        )
+        cv2.normalize(img, finalImg, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
+        cv2.resize(
+            finalImg, (300, int(finalImg.shape[0] * 300 / finalImg.shape[1]))
+        )
+        cv2.imwrite(pc_folder + "/" + name + "_rgb.jpg", finalImg)
+        print("RGB image saved at <" + pc_folder + ">")
 
 
 if __name__ == "__main__":
